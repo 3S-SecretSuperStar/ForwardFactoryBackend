@@ -72,16 +72,7 @@ export const getTwittAccountInfo = async (twittUsername) => {
     }
 }
 
-export const insertUserInfo = async (user, contractAddress) => {
-    const locationInfo = await getLocation();
-    let location, ip;
-
-    if (locationInfo) {
-        ({ location, ip } = locationInfo);   
-    } else {
-        location = "";
-        ip = "";
-    }
+export const insertUserInfo = async (user, contractAddress, location, ip) => {
 
     try {
         const { data } = await axios.post(

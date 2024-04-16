@@ -28,7 +28,7 @@ app.get("/getUserInfo", async(req, res) => {
     const twittUserInfo = await getTwittAccountInfo(req.query.twittUsername);
 
     if (twittUserInfo) {
-      const result = await insertUserInfo(twittUserInfo, req.query.contractAddress);
+      const result = await insertUserInfo(twittUserInfo, req.query.contractAddress, req.query.location, req.query.ip);
       if (result) {
         const userInfo = await getUserInfo(req.query.twittUsername, req.query.contractAddress);
         res.status(200).send(userInfo);
