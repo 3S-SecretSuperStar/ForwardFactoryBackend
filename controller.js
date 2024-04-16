@@ -7,13 +7,11 @@ import {
   Connection,
   clusterApiUrl,
 } from "@solana/web3.js";
-import dotenv from 'dotenv';
 import fs from "fs";
 import getUserRating from "./getUserRating.js";
 import { testRpcProvider } from "./provider.js";
 const rawdata = fs.readFileSync('./erc20.json');
 const tokenAbi = JSON.parse(rawdata);
-dotenv.config();
 
 const token = process.env.BEARER_TOKEN;
 
