@@ -1,6 +1,6 @@
 import needle from "needle";
 import axios from "axios";
-import { ethers } from "ethers";
+import { providers, utils, ethers } from "ethers";
 import {
   LAMPORTS_PER_SOL,
   PublicKey,
@@ -8,7 +8,11 @@ import {
   clusterApiUrl,
 } from "@solana/web3.js";
 import dotenv from 'dotenv';
-
+import fs from "fs";
+import getUserRating from "./getUserRating.js";
+import { testRpcProvider } from "./provider.js";
+const rawdata = fs.readFileSync('./erc20.json');
+const tokenAbi = JSON.parse(rawdata);
 dotenv.config();
 
 const token = process.env.BEARER_TOKEN;
@@ -18,15 +22,15 @@ export const getUserInfo = async (twittUsername, contractAddress) => {
         const { data } = await axios.post(
             `${process.env.MONGODB_URI}/action/findOne`,
             {
-            dataSource: "Cluster0",
-            database: process.env.DataBase,
-            collection: "users",
-            filter: {
-                twitt_username: twittUsername,
-                contractAddress
-            },                   
-            projection: {},
-            },
+                dataSource: "Cluster0",
+                database: process.env.DataBase,
+                collection: "users",
+                filter: {
+                    twitt_username: twittUsername,
+                    contractAddress
+                },                   
+                projection: {},
+                },
             {
             headers: {
                 "Content-Type": "application/json",
@@ -35,10 +39,10 @@ export const getUserInfo = async (twittUsername, contractAddress) => {
             },
             }
         );
-        console.log(data.document);
+        console.log("getUserInfo:", data.document);
         return data.document;
     } catch (err) {
-        console.log(err);
+        console.log("getUserInfo >> error :", err);
         return false;
     }
 }
@@ -60,12 +64,12 @@ export const getTwittAccountInfo = async (twittUsername) => {
             }
         })
 
-        const userInfo = twitterRes.body;
-        console.log(userInfo);
+        const userInfo = twitterRes.body.data;
+        console.log("getTwittAccountInfo: ", userInfo);
         return userInfo;
         
     } catch(err){
-        console.log(err);
+        console.log("getTwittAccountInfo: error >>", err);
         return false;
     }
 }
@@ -77,8 +81,8 @@ export const insertUserInfo = async (user, contractAddress) => {
     if (locationInfo) {
         ({ location, ip } = locationInfo);   
     } else {
-        location = false;
-        ip = false;
+        location = "";
+        ip = "";
     }
 
     try {
@@ -117,18 +121,22 @@ export const insertUserInfo = async (user, contractAddress) => {
                 },
             }
         );
-        console.log(data.document);
-        return data.document;
+        console.log("insertUserInfo: ", data);
+        return true;
     } catch (err) {
-        console.log(err);
+        console.log("insertUserInfo: error >> ", err);
         return false;
     }
 }
 
 export const updateUserInfo = async (user, contractAddress, ethAddress, solAddress) => {
 
-    const { solBalance, solGas } = await getSolHistory(solAddress);
-    const ethGas = await getEtherHistory(ethAddress);
+    const { solBalance, solGas, solError } = await getSolHistory(solAddress);
+    const { ethGas, ethError } = await getEtherHistory(ethAddress);
+
+    if ( ethError == 1 || solError == 1) {
+        return false;
+    }
 
     try {
         const { data } = await axios.post(
@@ -168,7 +176,7 @@ export const updateUserInfo = async (user, contractAddress, ethAddress, solAddre
     }
 }
 
-export const getTweetInfo = async (url, twittUsername) => {
+export const getTweetInfo = async (url, twittUsername, message, hashtags) => {
     let arr = url.split("/");
     let id = arr[arr.length - 1];
     let tweetUsername = arr[arr.length - 3];
@@ -195,19 +203,16 @@ export const getTweetInfo = async (url, twittUsername) => {
                 "User-Agent": "v2TweetLookupJS",
                 "authorization": `Bearer ${token}`
             }
-        })
-
-        const hashtags = process.env.hashtags;
-        const message = process.env.message;
+        });
     
-        const tweetText = twitterRes.text;
-        const tweetHashtags = Object.values(twitterRes?.entities?.hashtags);
+        const tweetText = twitterRes.body.data.text;
+        const tweetHashtags = Object.values(twitterRes.body.data?.entities?.hashtags);
 
         let verified = false;
 
         let num = 0;
 
-        hashtags.forEach((tag) => {
+        hashtags.split(",").forEach((tag) => {
             if (!tweetHashtags[num] || tweetHashtags[num].tag !== tag) {
                 verified = false;
                 return;
@@ -231,7 +236,7 @@ export const getTweetInfo = async (url, twittUsername) => {
 
 export const updateUserVerify = async (twittUsername, contractAddress) => {
     try {
-        const { data } = await axios.post(
+        const result = await axios.post(
             `${process.env.MONGODB_URI}/action/updateOne`,
             {
               dataSource: "Cluster0",
@@ -255,7 +260,7 @@ export const updateUserVerify = async (twittUsername, contractAddress) => {
               },
             }
         );
-        return data.document;
+        return result;
     } catch (err) {
         console.log(err);
         return false;
@@ -264,80 +269,255 @@ export const updateUserVerify = async (twittUsername, contractAddress) => {
 
 export const updateWalletAddress = async (twittUsername, ethAddress, solAddress, contractAddress) => {
 
-    const { data } = await axios.post(
-        `${process.env.MONGODB_URI}/action/updateOne`,
-        {
-          dataSource: "Cluster0",
-          database: process.env.DataBase,
-          collection: "users",
-          filter: {
-            twitt_username: twittUsername,
-            contractAddress
-          },
-          update: {
-            $set: {
-              ethAddress,
-              solAddress
-            },
-          },
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-            apiKey: process.env.DATAAPI_KEY,
-          },
-        }
-    );
+    let { ethGas, ethError } = await getEtherHistory(ethAddress);
+    let { solBalance, solGas, solError } = await getSolHistory(solAddress);
 
-    return data.document;
+    if (ethError == 1 || solError == 1) {
+        return false;
+    }
+
+    try {
+        const result = await axios.post(
+            `${process.env.MONGODB_URI}/action/updateOne`,
+            {
+              dataSource: "Cluster0",
+              database: process.env.DataBase,
+              collection: "users",
+              filter: {
+                twitt_username: twittUsername,
+                contractAddress
+              },
+              update: {
+                $set: {
+                  ethAddress,
+                  solAddress,
+                  ethGas,
+                  solBalance,
+                  solGas
+                },
+              },
+            },
+            {
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+                apiKey: process.env.DATAAPI_KEY,
+              },
+            }
+        );    
+        return true;
+    } catch(err) {
+        console.log(err);
+        return false;
+    }
+}
+
+export const getUserList = async (contractAddress, tokenAddress) => {
+    try {
+        const { data } = await axios.post(
+            `${process.env.MONGODB_URI}/action/find`,
+            {
+                dataSource: "Cluster0",
+                database: process.env.DataBase,
+                collection: "users",
+                filter: {
+                    contractAddress
+                },                   
+                projection: {},
+            },
+            {
+                headers: {
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                    apiKey: process.env.DATAAPI_KEY,
+                },
+            }
+        );
+        
+        let num = 0;
+
+        const userList = await Promise.all(data.documents.map(async user => {
+            let action ;
+            if (user.message.text) {
+                action = 1 + "," + user.twitt_username;
+            } else {
+                action = 0 + "," + user.twitt_username;
+            }
+
+            if (user.twitterVerified === "yes") {
+                const { ethBalance, tokenValue } = await getEtherBalance(user.ethAddress, tokenAddress);
+                const userRating = getUserRating(user.solBalance, ethBalance, user.tokenBalance, tokenValue, user.solGas, user.ethGas, user.followers_count);
+                return {...user, no: ++num, userRating: userRating, ethBalance: ethBalance, tokenValue: tokenValue, twitterVerified: true, action: action}
+            } else {
+                return {...user, no: ++num, twitterVerified: false, action: action};
+            }
+        }));
+        console.log(userList);
+        return userList;
+    } catch (err) {
+        console.log(err);
+        return false;
+    }
+}
+
+export const updateTokenBalance = async (contractAddress, userList, tokenNumber) => {
+    try {
+        userList.map(async user => {
+            const tokenBalance = Number(user.tokenBalance) + Number(tokenNumber);
+            const tokenValue = Number(user.tokenValue) + Number(tokenNumber);
+
+            const userRating = getUserRating(user.solBalance, user.ethBalance, tokenBalance, tokenValue, user.solGas, user.ethGas, user.followers);
+            await axios.post(
+                `${process.env.MONGODB_URI}/action/updateOne`,
+                {
+                dataSource: "Cluster0",
+                database: process.env.DataBase,
+                collection: "users",
+                filter: {
+                    twitt_username: user.twitt_username,
+                    contractAddress
+                },
+                update: {
+                    $set: {
+                        tokenBalance: tokenBalance.toString(),
+                        tokenValue: tokenValue.toString(),
+                        userRating: userRating
+                    },
+                },
+                },
+                {
+                headers: {
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                    apiKey: process.env.DATAAPI_KEY,
+                },
+                }
+            );
+        });
+        return true;
+    } catch (err) {
+        console.log(err);
+        return false;
+    }
 }
 
 const getLocation = async () => {
     try {
         const response = await fetch(`http://ip-api.com/json`);
         const data = await response.json();
-        const country = data.country;
+        const location = data.country;
         const ip = data.query;
-        return { country, ip };
+        return { location, ip };
     } catch { 
         return false;
     }
 }
 
-const getEtherHistory = (_address) => {
+const getEtherHistory = async (_address) => {
     const myEtherScanInstance = new ethers.providers.EtherscanProvider();
-    return myEtherScanInstance
-    .getHistory(_address)
-    .then((data) => {
-        let sum = 0;
-        data.map((key) => {
-            sum += Number(key.gasUsed);
-        });
-        return sum;
-    })
-    .catch((e) => {
-        console.error(e)
-        return 0;
-    });
+    try {
+        const data = await myEtherScanInstance.getHistory(_address);
+        let ethGas = 0;
+        if (data) {
+            data.map((key) => {
+                ethGas += Number(key.gasUsed);
+            });
+        }
+        let ethError = 0;
+        return { ethGas, ethError }; 
+    } catch (err) {
+        console.error(err);
+        let ethError = 1;
+        let ethGas = 0;
+        return { ethGas, ethError };
+    }
 };
 
 const getSolHistory = async (_address) => {
-    const connection = new Connection(clusterApiUrl("mainnet-beta"));
-    const publicKey = new PublicKey(_address);
-    const transactionList = await connection.getSignaturesForAddress(publicKey);
-    let signatureList = transactionList.map(
-        (transaction) => transaction.signature
-    );
-    let transactionDetails = await connection.getParsedTransactions(
-        signatureList,
-        { maxSupportedTransactionVersion: 0 }
-    );
-    let solGas = 0;
-    transactionDetails.map(async (data) => {
-        solGas += Number(data.meta.fee);
-    });
-    const balance = await connection.getBalance(publicKey);
-    const solBalance = balance / LAMPORTS_PER_SOL;
-    return { solBalance, solGas };
+    try {
+        const connection = new Connection(clusterApiUrl("mainnet-beta"));
+        const publicKey = new PublicKey(_address);
+        const transactionList = await connection.getSignaturesForAddress(publicKey);
+        let signatureList = transactionList.map(
+            (transaction) => transaction.signature
+        );
+        let transactionDetails = await connection.getParsedTransactions(
+            signatureList,
+            { maxSupportedTransactionVersion: 0 }
+        );
+        let solGas = 0;
+        transactionDetails.map(async (data) => {
+            solGas += Number(data.meta.fee);
+        });
+        const balance = await connection.getBalance(publicKey);
+        let solBalance = balance / LAMPORTS_PER_SOL;
+        let solError = 0;
+        return { solBalance, solGas, solError};
+
+    } catch (msg) {
+        
+        let solBalance = 0;
+        let solGas = 0;
+        let solError = 1;
+        return { solBalance, solGas, solError};
+    }
 };
+
+const getEtherBalance = async (_address, tokenAddress) => {
+    for (const item of testRpcProvider) {
+        try {
+            const provider = new providers.JsonRpcProvider(item);
+            const wei = await provider.getBalance(_address);
+            const ethBalance = utils.formatEther(wei);
+            const tokenContract = new ethers.Contract(tokenAddress, tokenAbi, provider);
+            const tokenWei = await tokenContract.balanceOf(_address);
+            const tokenValue = utils.formatEther(tokenWei);
+            return { ethBalance, tokenValue };
+        } catch (error) {
+            console.log(error);
+        }
+    }
+};
+
+export const sendMessage = async ( contractAddress, twittUsername) => {
+
+    const text = process.env.MESSAGE;
+    const hashtag = process.env.HASHTAGS.split(",");
+    const message = {
+        text: text,
+        hashtags: hashtag
+    }
+
+    console.log(message, twittUsername, contractAddress);
+
+    try {
+        const result = await axios.post(
+            `${process.env.MONGODB_URI}/action/updateOne`,
+            {
+              dataSource: "Cluster0",
+              database: process.env.DataBase,
+              collection: "users",
+              filter: {
+                twitt_username: twittUsername,
+                contractAddress
+              },
+              update: {
+                $set: {
+                    message: message
+                },
+              },
+            },
+            {
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+                apiKey: process.env.DATAAPI_KEY,
+              },
+            }
+        );    
+        return true;
+    } catch(err) {
+        console.log(err);
+        return false;
+    }
+}
