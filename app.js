@@ -73,7 +73,7 @@ app.get("/getTweetMessage", async(req, res) => {
 
 app.get("/getUserList", async(req, res) => {
 
-  const contractAddress = req.query.contractAddress;
+  const contractAddress = req.query.contractAdd;
   const tokenAddress = req.query.tokenAddress;
   const result = await getUserList(contractAddress, tokenAddress);
   if (result) {
@@ -115,9 +115,9 @@ app.post("/updateUserInfo", async(req, res) => {
 });
 
 app.post("/sendMessage", async(req, res) => {
-  const result = await sendMessage(req.body.contractAddress, req.body.twittUsername);
+  const result = await sendMessage(req.body.contractAdd, req.body.twittUsername);
   if (result) {
-    const userData = await getUserList(req.body.contractAddress, req.body.tokenAddress);
+    const userData = await getUserList(req.body.contractAdd, req.body.tokenAddress);
     res.status(200).send(userData);
   } else {
     res.status(401).send("Server Error");
@@ -125,7 +125,7 @@ app.post("/sendMessage", async(req, res) => {
 });
 
 app.post("/updateTokenBalance", async(req, res) => {
-  const contractAddress = req.body.contractAddress;
+  const contractAddress = req.body.contractAdd;
   const userList = req.body.userList;
   const tokenNumber = req.body.airdropNumber;
   const tokenAddress = req.body.tokenAddress;
