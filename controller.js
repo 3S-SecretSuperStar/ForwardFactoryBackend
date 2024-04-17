@@ -129,7 +129,7 @@ export const updateUserInfo = async (user, contractAddress, ethAddress, solAddre
 
     try {
         const { data } = await axios.post(
-            `${process.env.MONGODB_URI}/action/insertOne`,
+            `${process.env.MONGODB_URI}/action/updateOne`,
             {
                 dataSource: "Cluster0",
                 database: process.env.DataBase,

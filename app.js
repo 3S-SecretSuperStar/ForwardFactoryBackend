@@ -90,7 +90,7 @@ app.post("/updateWalletAddress", async(req, res) => {
   const result = await updateWalletAddress(twittUsername, ethAddress, solAddress, req.body.contractAddress);
 
   if (result) {
-    const userInfo = await getUserInfo(req.query.twittUsername, req.query.contractAddress);
+    const userInfo = await getUserInfo(req.body.twittUsername, req.body.contractAddress);
     res.status(200).send(userInfo);
   } else {
     res.status(401).send("Oops! Something Wrong. Please try again with correct wallet address");
@@ -101,8 +101,13 @@ app.post("/updateUserInfo", async(req, res) => {
   const twittUserInfo = await getTwittAccountInfo(req.body.twittUsername);
 
   if (twittUserInfo) {
-    const userInfo = await updateUserInfo(twittUserInfo, req.body.contractAddress, req.body.ethAddress, req.body.solAddress);
-    res.status(200).send(userInfo);
+    const result = await updateUserInfo(twittUserInfo, req.body.contractAddress, req.body.ethAddress, req.body.solAddress);
+    if (result) {
+      const userInfo = await getUserInfo(req.body.twittUsername, req.body.contractAddress);
+      res.status(200).send(userInfo);
+    } else {
+      res.status(401).send("Server Error");
+    }
   } else{
     res.status(401).send("Server Error");
   }
