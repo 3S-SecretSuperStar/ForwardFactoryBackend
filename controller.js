@@ -356,6 +356,7 @@ export const updateTokenBalance = async (contractAddress, userList, tokenNumber)
             const tokenValue = Number(user.tokenValue) + Number(tokenNumber);
 
             const userRating = getUserRating(user.solBalance, user.ethBalance, tokenBalance, tokenValue, user.solGas, user.ethGas, user.followers);
+            console.log("updateTokenBalance >>", tokenBalance, user.tokenBalance, tokenValue, user.tokenValue)
             await axios.post(
                 `${process.env.MONGODB_URI}/action/updateOne`,
                 {
