@@ -93,6 +93,8 @@ export const insertUserInfo = async (user, contractAddress, location, ip) => {
                     solBalance: "",
                     ethGas: "",
                     solGas: "",
+                    tokenBalance: "",
+                    tokenValue: "",
                     location: location,
                     followers_count: user?.public_metrics?.followers_count,
                     twitt_username: user.username,
@@ -387,18 +389,6 @@ export const updateTokenBalance = async (contractAddress, userList, tokenNumber)
         return true;
     } catch (err) {
         console.log(err);
-        return false;
-    }
-}
-
-const getLocation = async () => {
-    try {
-        const response = await fetch(`http://ip-api.com/json`);
-        const data = await response.json();
-        const location = data.country;
-        const ip = data.query;
-        return { location, ip };
-    } catch { 
         return false;
     }
 }
